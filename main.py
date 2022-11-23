@@ -1,12 +1,14 @@
 import cv2, os, time
 import utils
 
-vid = cv2.VideoCapture(0)   # define a video capture object.
-wname = 'Teslong cam'       # Window name.
-pos = utils.coords()        # Class which will contain position of clicked points and useful callbacks/methods.
-global _init                # To deal with first call of while loop.
-_init = True
-_savepic = False            # To be able to save both raw and annotated image.
+vid = cv2.VideoCapture(4)                   # define a video capture object (find number matching desired cam).
+wname = 'Teslong cam'                       # Window name.
+global _init                                # To deal with first call of while loop.
+_init = True                                # First iteration?
+_savepic = False                            # To be able to save both raw and annotated image.
+picdir = os.path.join(os.getcwd(), 'pics')  # Where images will be saved.
+if(not os.path.exists(picdir)):
+    os.mkdir(picdir)
 
 while(True):
 
@@ -24,25 +26,29 @@ while(True):
             sff = '_end' + timestr
         else:                                     # All other keys will save image without suffix.
             sff = timestr
-        cv2.imwrite(os.getcwd() + '/im_raw' + sff + '.png',frame)
+        cv2.imwrite(picdir + '/im_raw' + sff + '.png',frame)
         _savepic = True                           # To remember saving annotated image.
 
     if(_init==True):                              # First iteration.
+        pos = utils.coords(frame)                      # Class which will contain position of clicked points and useful callbacks/methods.
         cv2.namedWindow(wname)                    # Create window.
         cv2.setMouseCallback(wname, pos.callback_fun)  # Bind to appropriate callback.
-        cv2.imshow(wname, frame)                  # Display first frame.
+        cv2.imshow(wname, pos.im)                  # Display first frame.
         _init = False
     else:                                         # Second and following iterations.
-        im = pos.draw_pts(frame)                  # Add annotations to image.
-        cv2.imshow(wname, im)                     # Display annotated image.
+        pos.im = frame
+        pos.draw_pts()                            # Add annotations to image.
+        cv2.imshow(wname, pos.im)                 # Display annotated image.
         if(_savepic==True):
-            cv2.imwrite(os.getcwd() + '/im_annotated' + sff + '.png',frame)
+            cv2.imwrite(picdir + '/im_annotated' + sff + '.png',pos.im)
             _savepic = False
 
     # the 'q' button is set as the quitting button.
     if key == ord('q'):
         cv2.destroyWindow(wname)
         break
+
+    time.sleep(0.01)  # Slow down loop to save CPU.
 
 vid.release()  # Release cap object
 cv2.destroyAllWindows()  # Destroy all the windows

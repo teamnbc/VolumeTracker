@@ -10,7 +10,12 @@ import cv2, time, math
 
 class coords:
 
-     def __init__(self):
+     def __init__(self,imsrc):
+         '''
+         Class attributes.
+         '''
+
+         self.im = imsrc        # Image.
          self.pts = []          # Where clicked positions will be stored.
          self.current = None    # Where current position (not yet clicked) is stored.
          self.vslp = None       # Vertical slope.
@@ -22,8 +27,15 @@ class coords:
          self.pt_right = None   # Right point of upper limit.
          self.closest = None
          self.closest_last = None
+         self.fontscale = 0.7
+         self.od = 1            # Capillary OD in mm.
+         self.id = 0.5          # Capillary ID in mm.
 
      def callback_fun(self, event, x, y, flags, params):
+         '''
+         Callback method responding to mouse events.
+         '''
+
          # self.pts has a maximum of 4 points.
          if event == cv2.EVENT_LBUTTONDOWN and (len(self.pts) <= 4):  # Left button click.
              if(len(self.pts)==4):
@@ -52,26 +64,27 @@ class coords:
                  self.closest_last = self.closest
 
 
-     def draw_pts(self,im):
+     def draw_pts(self):
          '''
-         Draw points and lines on image
+         Method used to draw points and lines on image.
          '''
 
          if(len(self.pts)>0 and len(self.pts)<3):
              for i in range(len(self.pts)):
-                 cv2.circle(im, tuple(self.pts[i]), 5, (0, 255, 0), -1)
+                 cv2.circle(self.im, tuple(self.pts[i]), 5, (0, 255, 0), -1)
              if self.closest is not None:
-                 cv2.circle(im, tuple(self.closest), 20, (255, 255, 0), 1)
+                 cv2.circle(self.im, tuple(self.closest), 20, (255, 255, 0), 1)
              if(len(self.pts) <= 2):
-                 cv2.line(im, tuple(self.pts[-1]), tuple(self.current), (0, 255, 0), 1)
+                 cv2.line(self.im, tuple(self.pts[-1]), tuple(self.current), (0, 255, 0), 1)
 
          if len(self.pts) == 2:
              for i in range(len(self.pts) - 1):
-                 cv2.line(im, tuple(self.pts[i]), tuple(self.pts[i + 1]), (0, 255, 0), 1)
+                 cv2.line(self.im, tuple(self.pts[i]), tuple(self.pts[i + 1]), (0, 255, 0), 1)
 
          if len(self.pts) >= 3:
 
              # Draw most vertical line:
+
              tmp = self.pts.copy()  # Copy list of points.
              tmp.append(tmp[0])  # Add first point at end of list (to compute all possible diff).
              arr = np.array(tmp)  # Convert to np.
@@ -81,87 +94,125 @@ class coords:
                  # y = ax + b.
                  self.vslp = v[1]/v[0]  # Slope of vertical line.
                  self.vitc1 = arr[idx,1] - self.vslp*arr[idx,0]  # Intercept.
-                 vpts = np.round([[-self.vitc1/self.vslp,0] , [(im.shape[0]-self.vitc1)/self.vslp,im.shape[0]]]).astype(int)
+                 vpts = np.round([[-self.vitc1/self.vslp,0] , [(self.im.shape[0]-self.vitc1)/self.vslp,self.im.shape[0]]]).astype(int)
              else:  # If line linking pair of most vertical points perfectly vertical.
                  self.vslp = math.inf
-                 vpts = [[arr[idx,0],0],[arr[idx,0],im.shape[0]]]
-             cv2.line(im, tuple(vpts[0]), tuple(vpts[1]), (0, 0, 255), 1)  # Draw most vertical line.
+                 vpts = [[arr[idx,0],0],[arr[idx,0],self.im.shape[0]]]
+             cv2.line(self.im, tuple(vpts[0]), tuple(vpts[1]), (0, 0, 255), 1)  # Draw most vertical line.
 
-             # Draw parallel line going through third point:
+             # Draw parallel (also vertical) line going through third point:
              l = [0,1,2,0]
              gi = list(set(l) - set(l[idx:(idx+2)]))[0]  # Find remaining point.
              if(v[0]!=0):  # If line not perfectly vertical.
                  self.vitc2 = arr[gi,1] - self.vslp*arr[gi,0]  # Intercept
-                 vpts = np.round([[-self.vitc2/self.vslp,0] , [(im.shape[0]-self.vitc2)/self.vslp,im.shape[0]]]).astype(int)
+                 vpts = np.round([[-self.vitc2/self.vslp,0] , [(self.im.shape[0]-self.vitc2)/self.vslp,self.im.shape[0]]]).astype(int)
              else:  # If line perfectly vertical.
-                 vpts = [[arr[gi,0],0],[arr[gi,0],im.shape[0]]]
-             cv2.line(im, tuple(vpts[0]), tuple(vpts[1]), (0, 0, 255), 1)  # Draw parallel vertical line.
+                 vpts = [[arr[gi,0],0],[arr[gi,0],self.im.shape[0]]]
+             cv2.line(self.im, tuple(vpts[0]), tuple(vpts[1]), (0, 0, 255), 1)  # Draw parallel vertical line.
 
          if len(self.pts) == 4:
-             # Draw horizontal lines.
+
+             # Draw horizontal lines:
+             # - horizontal line where user clicked to indicate position of meniscus.
+             # - horizontal lines below to indicate volumes.
+
              if(self.vslp == math.inf):
                  self.hslp = 0
-                 vpts = [[0,-self.pts[3][1]] , [im.shape[1],-self.pts[3][1]]]
+                 vpts = np.array([[0,self.pts[3][1]] , [self.im.shape[1],self.pts[3][1]]])
              else:
-                 # x = ay + b.
+                 # x = -self.vslp * y + b for line perpendicular to vertical lines.
                  self.hslp = -self.vslp
                  self.hitc = self.pts[3][0] - self.hslp*self.pts[3][1]
-                 vpts = np.round([[0,-self.hitc/self.hslp] , [im.shape[1],(im.shape[1]-self.hitc)/self.hslp]]).astype(int)
-             cv2.line(im, tuple(vpts[0]), tuple(vpts[1]), (255, 0, 255), 1)
+                 vpts = np.round([[0,-self.hitc/self.hslp] , [self.im.shape[1],(self.im.shape[1]-self.hitc)/self.hslp]]).astype(int)
+             cv2.line(self.im, tuple(vpts[0]), tuple(vpts[1]), (0, 0, 255), 1)
 
-             # Intersection points (left = (x1,y1), right = (x2,y2)).
+             # Intersection of horizontal and vertical lines (left = (x1,y1), right = (x2,y2)).
              if(self.vslp!=math.inf):
                  x1 = (self.vitc1 * self.hslp + self.hitc) / (1 - self.vslp*self.hslp)
                  y1 = self.vslp * x1 + self.vitc1
              else:
                  x1 = np.min(np.unique(np.array(self.pts)[:,0])).astype(int)
                  y1 = self.pts[3][1]
-             self.pt_left = np.round([x1,y1]).astype(int)
-             cv2.circle(im, tuple(self.pt_left), 5, (255, 0, 255), -1)
+             self.pt_left = list(np.round([x1,y1]).astype(int))
+             # cv2.circle(self.im, tuple(self.pt_left), 5, (0, 0, 255), -1)
              if(self.vslp!=math.inf):
                  x2 = (self.vitc2 * self.hslp + self.hitc) / (1 - self.vslp*self.hslp)
                  y2 = self.vslp * x2 + self.vitc2
              else:
                  x2 = np.max(np.unique(np.array(self.pts)[:,0])).astype(int)
                  y2 = self.pts[3][1]
-             self.pt_right = np.round([x2,y2]).astype(int)
-             cv2.circle(im, tuple(self.pt_right), 5, (255, 0, 255), -1)
-
-             im = self.draw_vol_line(im,100,(255, 0, 255))
-             im = self.draw_vol_line(im,25,(127, 127, 255))
-             im = self.draw_vol_line(im,50,(127, 127, 255))
-             im = self.draw_vol_line(im,75,(127, 127, 255))
-             im = self.draw_vol_line(im,125,(127, 127, 255))
-             im = self.draw_vol_line(im,150,(127, 127, 255))
-
-         return(im)
+             self.pt_right = list(np.round([x2,y2]).astype(int))
+             # cv2.circle(self.im, tuple(self.pt_right), 5, (0, 0, 255), -1)
+             cv2.putText(self.im, 'Start', tuple(list(np.round([x2+10,y2-10]).astype(int))),cv2.FONT_HERSHEY_SIMPLEX, self.fontscale, (0, 0, 255), lineType=cv2.LINE_AA)
+             cv2.putText(self.im, 'OD = ' + str(self.od) + ' mm', tuple([10,22]),cv2.FONT_HERSHEY_SIMPLEX, self.fontscale, (0, 0, 0), lineType=cv2.LINE_AA)
+             cv2.putText(self.im, 'ID = ' + str(self.id) + ' mm', tuple([10,42]),cv2.FONT_HERSHEY_SIMPLEX, self.fontscale, (0, 0, 0), lineType=cv2.LINE_AA)
 
 
-     def draw_vol_line(self,im,vol,col):
+             # Vertical lines showing inner diameter.
+             # Compute width of capillary (= 1 mm in real life) on image.
+             wdth = math.sqrt((self.pt_right[0]-self.pt_left[0])**2 + (self.pt_right[1]-self.pt_left[1])**2)
+             if(self.vslp == math.inf):
+                 dx = 0.5*(self.od-self.id) * wdth
+                 vpts1 = np.round(np.array([[self.pt_left[0] + dx,0] , [self.pt_left[0] + dx,self.im.shape[1]]])).astype(int)
+                 dx = 1.5*(self.od-self.id) * wdth
+                 vpts2 = np.round(np.array([[self.pt_left[0] + dx,0] , [self.pt_left[0] + dx,self.im.shape[1]]])).astype(int)
+             else:
+                 dy = math.sqrt((0.5*(self.od-self.id) * wdth)**2 / (1 + self.hslp**2))
+                 dx = self.hslp * dy
+                 if(self.vslp>0):
+                     x = self.pt_left[0] - dx
+                     y = self.pt_left[1] - dy
+                 if(self.vslp<0):
+                     x = self.pt_left[0] + dx
+                     y = self.pt_left[1] - dy
+                 itc = y - self.vslp * x
+                 vpts1 = np.round(np.array([[-itc/self.vslp,0] , [(self.im.shape[1]-itc)/self.vslp,self.im.shape[1]]])).astype(int)
+                 dy = math.sqrt((1.5*(self.od-self.id) * wdth)**2 / (1 + self.hslp**2))
+                 dx = self.hslp * dy
+                 if(self.vslp>0):
+                     x = self.pt_left[0] - dx
+                     y = self.pt_left[1] - dy
+                 if(self.vslp<0):
+                     x = self.pt_left[0] + dx
+                     y = self.pt_left[1] - dy
+                 itc = y - self.vslp * x
+                 vpts2 = np.round(np.array([[-itc/self.vslp,0] , [(self.im.shape[1]-itc)/self.vslp,self.im.shape[1]]])).astype(int)
+             cv2.line(self.im, tuple(vpts1[0]), tuple(vpts1[1]), (0, 0, 255), 1)
+             cv2.line(self.im, tuple(vpts2[0]), tuple(vpts2[1]), (0, 0, 255), 1)
+
+             self.draw_vol_line(100,(255, 255, 0))
+             self.draw_vol_line(25,(255, 255, 0))
+             self.draw_vol_line(50,(255, 255, 0))
+             self.draw_vol_line(75,(255, 255, 0))
+             self.draw_vol_line(125,(255, 255, 0))
+             self.draw_vol_line(150,(255, 255, 0))
+
+
+     def draw_vol_line(self,vol,col):
          '''
-         Draw volume lines
-         vol in microL
+         Method used to draw volume lines.
+         (vol in microL)
          '''
 
-         id = 0.5  # in mm
-         od = 1  # in mm
          # Compute width of capillary (= 1 mm in real life) on image.
          wdth = math.sqrt((self.pt_right[0]-self.pt_left[0])**2 + (self.pt_right[1]-self.pt_left[1])**2)
          # Height in mm for a volume of 100 microL in a cylinder of radius 0.5 mm (capillary ID):
-         h = (vol/1000) / (math.pi * (id/2)**2)  # h in mm
+         h = (vol/1000) / (math.pi * (self.id/2)**2)  # h in mm
          # Compute delta x and delta y
-         dy = abs(self.vslp*math.sqrt((h*wdth)**2 / (1 + self.vslp**2)))
-         dx = dy/self.vslp
+         if(self.vslp!=math.inf):
+             dy = abs(self.vslp*math.sqrt((h*wdth)**2 / (1 + self.vslp**2)))
+             dx = dy/self.vslp
+         else:
+             dy = h*wdth
+             dx = 0
          # (x3,y3) is lower left point showing V = vol
          x3 = self.pt_left[0] + dx
          y3 = self.pt_left[1] + dy
-         cv2.circle(im, tuple(np.round([x3,y3]).astype(int)), 5, (255, 0, 255), -1)
+         # cv2.circle(self.im, tuple(list(np.round([x3,y3]).astype(int))), 5, col, -1)
          # (x4,y4) is lower right point showing V = 100 microL
          x4 = self.pt_right[0] + dx
          y4 = self.pt_right[1] + dy
-         cv2.circle(im, tuple(np.round([x4,y4]).astype(int)), 5, (255, 0, 255), -1)
+         # cv2.circle(self.im, tuple(list(np.round([x4,y4]).astype(int))), 5, col, -1)
          # Draw line
-         cv2.line(im, tuple(np.round([x3,y3]).astype(int)), tuple(np.round([x4,y4]).astype(int)), col, 1)
-         cv2.putText(im, str(vol) + ' uL', tuple(np.round([x4,y4]).astype(int)),cv2.FONT_HERSHEY_SIMPLEX, 1.0, col, lineType=cv2.LINE_AA)
-
-         return(im)
+         cv2.line(self.im, tuple(list(np.round([x3,y3]).astype(int))), tuple(list(np.round([x4,y4]).astype(int))), col, 1)
+         cv2.putText(self.im, str(vol) + ' uL', tuple(list(np.round([x4+10,y4]).astype(int))),cv2.FONT_HERSHEY_SIMPLEX, self.fontscale, col, lineType=cv2.LINE_AA)
