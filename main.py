@@ -1,8 +1,14 @@
+######################################
+# main.py                            #
+# Main code of VolumeTracker project #
+######################################
+
 import cv2, os, time
 import utils
 
-vid = cv2.VideoCapture(4)                   # define a video capture object (find number matching desired cam).
-wname = 'Teslong cam'                       # Window name.
+scale_percent, volumes, od, id = utils.getargs()    # Get arguments.
+vid = cv2.VideoCapture(0)                   # define a video capture object (find number matching desired cam).
+wname = 'Cam'                               # Window name.
 global _init                                # To deal with first call of while loop.
 _init = True                                # First iteration?
 _savepic = False                            # To be able to save both raw and annotated image.
@@ -12,72 +18,39 @@ if(not os.path.exists(picdir)):
 
 while(True):
 
-    key = cv2.waitKey(1) & 0xFF     # Monitor key strokes.
-    if(_init==True):
-        key_copy = key              # To detect key strokes.
-
     ret, frame = vid.read()         # Capture frame from cam.
+    if(scale_percent != 100):
+        frame = utils.resize_im(frame, scale_percent)
 
-    if(key != key_copy):
-        timestr = '_' + time.strftime("%Y%m%d-%H%M%S")  # Keep track of date and time.
-        if key == ord('b'):                       # Press 'b' for saving image at beginning of injection.
-            sff = '_beginning' + timestr
-        elif key == ord('e'):                     # Press 'e' for saving image at end of injection.
-            sff = '_end' + timestr
-        else:                                     # All other keys will save image without suffix.
-            sff = timestr
-        cv2.imwrite(picdir + '/im_raw' + sff + '.png',frame)
-        _savepic = True                           # To remember saving annotated image.
+    key = cv2.waitKey(1) & 0xFF     # Monitor key strokes.
+    if((key == ord('b')) or (key == ord('e')) or (key == ord('s'))):
+        sfx = '_' + time.strftime("%Y%m%d-%H%M%S")  # Keep track of date and time.
+        if key == ord('b'):                         # Press 'b' for saving image with suffix 'beginning'.
+            sfx = '_beginning' + sfx
+        elif key == ord('e'):                       # Press 'e' for saving image with suffix 'end'.
+            sfx = '_end' + sfx
+        cv2.imwrite(picdir + '/im_raw' + sfx + '.png',frame)
+        _savepic = True                             # To remember saving annotated image.
 
     if(_init==True):                              # First iteration.
-        pos = utils.coords(frame)                      # Class which will contain position of clicked points and useful callbacks/methods.
+        pos = utils.coords(frame,volumes,od,id)   # Class which will contain position of clicked points and useful callbacks/methods.
         cv2.namedWindow(wname)                    # Create window.
         cv2.setMouseCallback(wname, pos.callback_fun)  # Bind to appropriate callback.
-        cv2.imshow(wname, pos.im)                  # Display first frame.
+        cv2.imshow(wname, pos.im)                 # Display first frame.
         _init = False
     else:                                         # Second and following iterations.
         pos.im = frame
         pos.draw_pts()                            # Add annotations to image.
         cv2.imshow(wname, pos.im)                 # Display annotated image.
         if(_savepic==True):
-            cv2.imwrite(picdir + '/im_annotated' + sff + '.png',pos.im)
+            cv2.imwrite(picdir + '/im_annotated' + sfx + '.png',pos.im)
             _savepic = False
 
-    # the 'q' button is set as the quitting button.
-    if key == ord('q'):
+    if key == ord('q'):                           # 'q' button set as the quitting key.
         cv2.destroyWindow(wname)
         break
 
-    time.sleep(0.01)  # Slow down loop to save CPU.
+    time.sleep(0.01)                              # Slow down loop to save CPU.
 
 vid.release()  # Release cap object
 cv2.destroyAllWindows()  # Destroy all the windows
-
-# import numpy as np
-# pts = [[151, 64], [151, 379], [523, 370]]
-# np.min(np.unique(np.array(pts)[:,0]))
-# x1 = np.min(np.unique(np.array(pts)[:,0])).astype(int)
-# y1 = pts[2][1]
-# np.round([x1,y1]).astype(int)
-# np.min(np.unique(np.array(pts)[:,0])).astype(int)
-
-# im = cv2.imread('/users/nbc/gdugue/Nextcloud_IBENS/PROJECTS/git/Teslong/pic.jpg')
-#
-# pts.append(pts[0])
-# arr = np.array(pts)
-# idx = np.argmin(np.abs(np.diff(arr[:,0])))  # Index of most vertical pair of points (can take values 0,1,2)
-# v = np.diff(np.transpose(arr[idx:(idx+2),:]))[:,0]  # Diff along x and y.
-# if(v[0]!=0):
-#
-# slp = v[1]/v[0]  # Slope
-# itc = arr[1,1] - slp*arr[1,0]  # Intercept
-# vpts = np.round([[-itc/slp,0] , [(im.shape[0]-itc)/slp,im.shape[0]]]).astype(int)
-# cv2.line(im, tuple(vpts[0]), tuple(vpts[1]), (0, 0, 255), 1)
-# while 1:
-#     cv2.imshow('bla',im)
-#     if cv2.waitKey(1) & 0xFF == ord('q'):
-#         cv2.destroyWindow(wname)
-#         break
-#
-# l=[0,1,2,0]
-# list(set(l) - set(l[idx:(idx+2)]))[0]

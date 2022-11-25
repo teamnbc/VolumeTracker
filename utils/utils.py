@@ -1,21 +1,24 @@
 ######################################
 # utils.py                           #
-# part of Teslong project            #
+# part of VolumeTracker project      #
 # Classes used to annotate images.   #
 ######################################
 
 import numpy as np
-import cv2, time, math
+import cv2, time, math, argparse
 
 
 class coords:
 
-     def __init__(self,imsrc):
+     def __init__(self,imsrc,volumes,od,id):
          '''
          Class attributes.
          '''
 
          self.im = imsrc        # Image.
+         self.volumes = volumes # Volumes to track.
+         self.od = od           # Capillary OD in mm.
+         self.id = id           # Capillary ID in mm.
          self.pts = []          # Where clicked positions will be stored.
          self.current = None    # Where current position (not yet clicked) is stored.
          self.vslp = None       # Vertical slope.
@@ -28,8 +31,7 @@ class coords:
          self.closest = None
          self.closest_last = None
          self.fontscale = 0.7
-         self.od = 1            # Capillary OD in mm.
-         self.id = 0.5          # Capillary ID in mm.
+
 
      def callback_fun(self, event, x, y, flags, params):
          '''
@@ -149,15 +151,15 @@ class coords:
 
 
              # Vertical lines showing inner diameter.
-             # Compute width of capillary (= 1 mm in real life) on image.
+             # Compute width of capillary on image.
              wdth = math.sqrt((self.pt_right[0]-self.pt_left[0])**2 + (self.pt_right[1]-self.pt_left[1])**2)
              if(self.vslp == math.inf):
-                 dx = 0.5*(self.od-self.id) * wdth
+                 dx = 0.5*(self.od-self.id) * wdth / self.od
                  vpts1 = np.round(np.array([[self.pt_left[0] + dx,0] , [self.pt_left[0] + dx,self.im.shape[1]]])).astype(int)
-                 dx = 1.5*(self.od-self.id) * wdth
+                 dx = (0.5*(self.od-self.id)+self.id) * wdth / self.od
                  vpts2 = np.round(np.array([[self.pt_left[0] + dx,0] , [self.pt_left[0] + dx,self.im.shape[1]]])).astype(int)
              else:
-                 dy = math.sqrt((0.5*(self.od-self.id) * wdth)**2 / (1 + self.hslp**2))
+                 dy = math.sqrt((0.5*(self.od-self.id) * wdth / self.od)**2 / (1 + self.hslp**2))
                  dx = self.hslp * dy
                  if(self.vslp>0):
                      x = self.pt_left[0] - dx
@@ -167,7 +169,7 @@ class coords:
                      y = self.pt_left[1] - dy
                  itc = y - self.vslp * x
                  vpts1 = np.round(np.array([[-itc/self.vslp,0] , [(self.im.shape[1]-itc)/self.vslp,self.im.shape[1]]])).astype(int)
-                 dy = math.sqrt((1.5*(self.od-self.id) * wdth)**2 / (1 + self.hslp**2))
+                 dy = math.sqrt(((0.5*(self.od-self.id)+self.id) * wdth / self.od)**2 / (1 + self.hslp**2))
                  dx = self.hslp * dy
                  if(self.vslp>0):
                      x = self.pt_left[0] - dx
@@ -180,12 +182,8 @@ class coords:
              cv2.line(self.im, tuple(vpts1[0]), tuple(vpts1[1]), (0, 0, 255), 1)
              cv2.line(self.im, tuple(vpts2[0]), tuple(vpts2[1]), (0, 0, 255), 1)
 
-             self.draw_vol_line(100,(255, 255, 0))
-             self.draw_vol_line(25,(255, 255, 0))
-             self.draw_vol_line(50,(255, 255, 0))
-             self.draw_vol_line(75,(255, 255, 0))
-             self.draw_vol_line(125,(255, 255, 0))
-             self.draw_vol_line(150,(255, 255, 0))
+             for i in self.volumes:
+                 self.draw_vol_line(i,(255, 255, 0))
 
 
      def draw_vol_line(self,vol,col):
@@ -196,14 +194,14 @@ class coords:
 
          # Compute width of capillary (= 1 mm in real life) on image.
          wdth = math.sqrt((self.pt_right[0]-self.pt_left[0])**2 + (self.pt_right[1]-self.pt_left[1])**2)
-         # Height in mm for a volume of 100 microL in a cylinder of radius 0.5 mm (capillary ID):
+         # Height in mm for a volume of 100 microL in a cylinder of radius self.id (capillary ID):
          h = (vol/1000) / (math.pi * (self.id/2)**2)  # h in mm
          # Compute delta x and delta y
          if(self.vslp!=math.inf):
-             dy = abs(self.vslp*math.sqrt((h*wdth)**2 / (1 + self.vslp**2)))
+             dy = abs(self.vslp*math.sqrt((h*wdth / self.od)**2 / (1 + self.vslp**2)))
              dx = dy/self.vslp
          else:
-             dy = h*wdth
+             dy = h*wdth / self.od
              dx = 0
          # (x3,y3) is lower left point showing V = vol
          x3 = self.pt_left[0] + dx
@@ -216,3 +214,57 @@ class coords:
          # Draw line
          cv2.line(self.im, tuple(list(np.round([x3,y3]).astype(int))), tuple(list(np.round([x4,y4]).astype(int))), col, 1)
          cv2.putText(self.im, str(vol) + ' uL', tuple(list(np.round([x4+10,y4]).astype(int))),cv2.FONT_HERSHEY_SIMPLEX, self.fontscale, col, lineType=cv2.LINE_AA)
+
+def getargs():
+    '''
+    Deal with arguments.
+    '''
+
+    parser = argparse.ArgumentParser()
+
+    #-s SCALE -v VOLUME
+    parser.add_argument("-s", "--scale", help="Scale (% of original)", type=int)
+    parser.add_argument("-v", "--volume", help="Volume(s) in microL", type=list_str)
+    parser.add_argument("-od", "--outer_diameter", help="Outer diameter in mm", type=float)
+    parser.add_argument("-id", "--inner_diameter", help="Inner diameter in mm", type=float)
+
+    args = parser.parse_args()
+
+    if args.scale == None:
+        scale_percent = 200         # Default value for scale (in percent).
+    else:
+        scale_percent = args.scale
+    if args.volume == None:
+        volume = [20,40,60,80,100]  # Default values for volumes.
+    else:
+        volume = args.volume
+    if args.outer_diameter == None:
+        od = 1
+    else:
+        od = args.outer_diameter
+    if args.inner_diameter == None:
+        id = 0.5
+    else:
+        id = args.inner_diameter
+
+    print('Using the following values:\nScale: {}%\nVolume(s): {} microL\nOD: {} mm\nID: {} mm'.format(scale_percent,volume,od,id))
+
+    return scale_percent, volume, od, id
+
+
+def list_str(values):
+    '''
+    Convert list of strings into list of integers.
+    '''
+    return [int(x) for x in (values.split(','))]
+
+def resize_im(im, scale):
+    '''
+    Image resizing.
+    Scale: scaling factor in percent of original.
+    '''
+
+    width = int(im.shape[1] * scale / 100)
+    height = int(im.shape[0] * scale / 100)
+    resized = cv2.resize(im, (width, height), interpolation = cv2.INTER_AREA)
+    return resized
