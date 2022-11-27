@@ -5,6 +5,8 @@ Image annotation tool to keep track of movements of a meniscus during injections
 
 Getting precise small volume injections can be challenging. At the end, what really tells you how much liquid was injected is the displacement of the meniscus (oil-water interface). The movement of the meniscus can be hard to notice visually, even with conventional stereomicroscopes (and especially for small volumes). The proposed solution is to track the movement of the meniscus using a small USB microscope.
 
+> For the companion files to 3D print the USB microscope holder, check https://github.com/teamnbc/USBCameraHolder.git
+
 This Python code uses the OpenCV library to annotate the live image of the capillary and (knowing its diameter) to provide a graduation in order to track the exact volume injected.
 
 ## Usage
