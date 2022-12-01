@@ -189,7 +189,7 @@ class coords:
      def draw_vol_line(self,vol,col):
          '''
          Method used to draw volume lines.
-         (vol in microL)
+         (vol in nL)
          '''
 
          # Compute width of capillary (= 1 mm in real life) on image.
@@ -213,7 +213,7 @@ class coords:
          # cv2.circle(self.im, tuple(list(np.round([x4,y4]).astype(int))), 5, col, -1)
          # Draw line
          cv2.line(self.im, tuple(list(np.round([x3,y3]).astype(int))), tuple(list(np.round([x4,y4]).astype(int))), col, 1)
-         cv2.putText(self.im, str(vol) + ' uL', tuple(list(np.round([x4+10,y4]).astype(int))),cv2.FONT_HERSHEY_SIMPLEX, self.fontscale, col, lineType=cv2.LINE_AA)
+         cv2.putText(self.im, str(vol) + ' nL', tuple(list(np.round([x4+10,y4]).astype(int))),cv2.FONT_HERSHEY_SIMPLEX, self.fontscale, col, lineType=cv2.LINE_AA)
 
 def getargs():
     '''
@@ -224,7 +224,7 @@ def getargs():
 
     #-s SCALE -v VOLUME
     parser.add_argument("-s", "--scale", help="Scale (% of original)", type=int)
-    parser.add_argument("-v", "--volume", help="Volume(s) in microL", type=list_str)
+    parser.add_argument("-v", "--volume", help="Volume(s) in nL", type=list_str)
     parser.add_argument("-od", "--outer_diameter", help="Outer diameter in mm", type=float)
     parser.add_argument("-id", "--inner_diameter", help="Inner diameter in mm", type=float)
 
@@ -247,7 +247,7 @@ def getargs():
     else:
         id = args.inner_diameter
 
-    print('Using the following values:\nScale: {}%\nVolume(s): {} microL\nOD: {} mm\nID: {} mm'.format(scale_percent,volume,od,id))
+    print('Using the following values:\nScale: {}%\nVolume(s): {} nL\nOD: {} mm\nID: {} mm'.format(scale_percent,volume,od,id))
 
     return scale_percent, volume, od, id
 
